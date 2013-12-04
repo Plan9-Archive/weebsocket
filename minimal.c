@@ -18,8 +18,14 @@ dostuff(HConnect *c)
 
 	hprint(ho, "<html><body>\r\n"
 		"<h1>whee, httpd <i>magic</i> is working!</h1>\r\n"
-		"<p>Lorem ipsum and so on.  I can eat glass!\r\n"
-		"</body></html>\r\n");
+		"<p>Lorem ipsum and so on.  I can eat glass!\r\n");
+
+	hprint(ho, "<pre>%s</pre>\r\n", c->header);
+
+	hprint(ho, "</body></html>\r\n");
+
+/* HSPairs for headers! */
+
 
 	hflush(ho);
 	return 1;
