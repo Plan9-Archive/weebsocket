@@ -6,9 +6,63 @@
 
 Hio *ho;
 
+#define MAXHDRS 64
+
+HSPairs *
+parseheaders(char *headers)
+{
+	char *hdrlines[MAXHDRS];
+	HSPairs *h, *t;
+	int nhdr;
+	int i;
+
+	h = t = nil;
+
+	nhdr = getfields(headers, hdrlines, MAXHDRS, 1, "\r\n");
+
+	/* XXX I think leading whitespaces signifies a continuation line. */
+	for(i = 0; i < nhdr; ++i){
+		HSPairs *tmp;
+		char *colon;
+
+		if(!hdrlines[i])
+			continue;
+
+		colon = strchr(hdrlines[i], ':');
+		if(!colon)
+			continue;
+
+		*(colon++) = '\0';
+		colon += strspn(colon, " \t");
+
+		if((tmp = malloc(sizeof(HSPairs))) == nil)
+			goto cleanup;
+
+		tmp->s = hdrlines[i];
+		tmp->t = colon;
+
+		if(!h){
+			h = t = tmp;
+		}else{
+			t->next = tmp;
+			t = tmp;
+		}
+		tmp->next = nil;
+	}
+
+	return h;
+
+cleanup:
+	for(t = h->next; h != nil; h = t, t = h->next)
+		free(h);
+	return nil;
+}
+		
 int
 dostuff(HConnect *c)
 {
+	HSPairs *hdrs, *h;
+
 	if(strcmp(c->req.meth, "GET"))
 		return hunallowed(c, "GET");
 
@@ -21,6 +75,13 @@ dostuff(HConnect *c)
 		"<p>Lorem ipsum and so on.  I can eat glass!\r\n");
 
 	hprint(ho, "<pre>%s</pre>\r\n", c->header);
+
+	hdrs = parseheaders((char *)c->header);
+	hprint(ho, "<table>\n");
+	for(h = hdrs; h != nil; h = h->next){
+		hprint(ho, "\t<tr><td>%s</td><td>%s</td></tr>\n", h->s, h->t);
+	}
+	hprint(ho, "</table>\n");
 
 	hprint(ho, "</body></html>\r\n");
 

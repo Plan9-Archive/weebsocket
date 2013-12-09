@@ -1,10 +1,10 @@
 more funny names: vermaj: vermin
 
 Best strategy: modify libhttpd to list all headers.
-/sys/src/libhttpd/parse.c:mimeconnection
+/sys/src/libhttpd/parse.c:/mimeconnection/
 is the relevant function.
 
-/sys/include/httpd.h:HttpHead
+/sys/include/httpd.h:/HttpHead/
 struct meant to store all parsed headers.
 Currently it only stores headers recognised specially by libhttpd.
 Add a field
