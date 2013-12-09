@@ -21,25 +21,21 @@ parseheaders(char *headers)
 	nhdr = getfields(headers, hdrlines, MAXHDRS, 1, "\r\n");
 
 	/* XXX I think leading whitespaces signifies a continuation line. */
-	for(i = 0; i < nhdr; ++i){
+	/* Skip the first line, or else getfields(..., " ") picks up the GET. */
+	for(i = 1; i < nhdr; ++i){
 		HSPairs *tmp;
-		char *colon;
+		char *kv[2];
 
 		if(!hdrlines[i])
 			continue;
 
-		colon = strchr(hdrlines[i], ':');
-		if(!colon)
-			continue;
-
-		*(colon++) = '\0';
-		colon += strspn(colon, " \t");
+		getfields(hdrlines[i], kv, 2, 1, ": \t");
 
 		if((tmp = malloc(sizeof(HSPairs))) == nil)
 			goto cleanup;
 
-		tmp->s = hdrlines[i];
-		tmp->t = colon;
+		tmp->s = kv[0];
+		tmp->t = kv[1];
 
 		if(!h){
 			h = t = tmp;
