@@ -53,7 +53,16 @@ cleanup:
 		free(h);
 	return nil;
 }
-		
+
+HSPairs *
+getheader(HSPairs *h, const char *k)
+{
+	for(; h != nil; h = h->next)
+		if(!cistrcmp(h->s, k))
+			return h;
+	return nil;
+}
+
 int
 dostuff(HConnect *c)
 {
@@ -79,6 +88,7 @@ dostuff(HConnect *c)
 	}
 	hprint(ho, "</table>\n");
 
+	hprint(ho, "<b>Connection:</b> <tt>%s</tt>\n", getheader(hdrs, "connection")->t);
 	hprint(ho, "</body></html>\r\n");
 
 /* HSPairs for headers! */
