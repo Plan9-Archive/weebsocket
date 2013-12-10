@@ -4,12 +4,8 @@ Weebsocket is a WebSocket server for Plan 9.
 
 ## Installing
 
-Currently this is a bit of a hack.
-
-    cp websocket.c /sys/src/cmd/ip/httpd/
-    cd /sys/src/cmd/ip/httpd/
-    # add "websocket" to TARG and XTARG in mkfile
-    mk install
+Add `websocket` to `TARG` and `XTARG` in
+`/sys/src/cmd/ip/httpd/mkfile`, then run `mk` in this directory.
 
 ## Testing
 
