@@ -8,7 +8,7 @@ Currently this is a bit of a hack.
 
     cp websocket.c /sys/src/cmd/ip/httpd/
     cd /sys/src/cmd/ip/httpd/
-    # add "websocket" to TARG in mkfile
+    # add "websocket" to TARG and XTARG in mkfile
     mk install
 
 ## Testing
