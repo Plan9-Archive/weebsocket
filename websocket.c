@@ -64,12 +64,32 @@ getheader(HSPairs *h, const char *k)
 }
 
 int
+failhdr(HConnect *c, int code, const char *status, const char *message)
+{
+	Hio *o;
+	o = &c->hout;
+	hprint(o, "%s %d %s\r\n", hversion, code, status);
+	hprint(o, "Server: Plan9\r\n");
+	hprint(o, "Date: %D\r\n", time(nil));
+	hprint(o, "Content-type: text/html\r\n");
+	hprint(o, "\r\n");
+	hprint(o, "<html><head><title>%d %s</title></head>\n", code, status);
+	hprint(o, "<body><h1>%d %s</h1>\n", code, status);
+	hprint(o, "<p>Failed to establish websocket connection: %s\n", message);
+	hprint(o, "</body></html>\n");
+	hflush(o);
+	return 0;
+}
+
+int
 dostuff(HConnect *c)
 {
 	HSPairs *hdrs, *h;
 
 	if(strcmp(c->req.meth, "GET"))
 		return hunallowed(c, "GET");
+
+	//return failhdr(c, 403, "Forbidden", "my hair is on fire");
 
 	hokheaders(c);
 	hprint(ho, "Content-type: text/html\r\n");
@@ -78,8 +98,6 @@ dostuff(HConnect *c)
 	hprint(ho, "<html><body>\r\n"
 		"<h1>whee, httpd <i>magic</i> is working!</h1>\r\n"
 		"<p>Lorem ipsum and so on.  I can eat glass!\r\n");
-
-	hprint(ho, "<pre>%s</pre>\r\n", c->header);
 
 	hdrs = parseheaders((char *)c->header);
 	hprint(ho, "<table>\n");
@@ -90,9 +108,6 @@ dostuff(HConnect *c)
 
 	hprint(ho, "<b>Connection:</b> <tt>%s</tt>\n", getheader(hdrs, "connection")->t);
 	hprint(ho, "</body></html>\r\n");
-
-/* HSPairs for headers! */
-
 
 	hflush(ho);
 	return 1;
