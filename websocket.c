@@ -1,6 +1,8 @@
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
+#include <mp.h>
+#include <libsec.h>
 #include "httpd.h"
 #include "httpsrv.h"
 
@@ -119,8 +121,10 @@ dowebsock(HConnect *c)
 	HSPairs *hdrs;
 	char *s, *wsclientkey;
 	char *rawproto;
-	char *wshashedkey, *proto;
-	uchar wsclientkeydec[16];
+	char *proto;
+	char wscatkey[64];
+	uchar wshashedkey[SHA1dlen];
+	char wsencoded[32];
 
 	if(strcmp(c->req.meth, "GET"))
 		return hunallowed(c, "GET");
@@ -136,26 +140,29 @@ dowebsock(HConnect *c)
 	if(!s || !cistrstr(s, "upgrade"))
 		return failhdr(c, 400, "Bad Request", "no <pre>connection: upgrade</pre> header.");
 	wsclientkey = getheader(hdrs, "sec-websocket-key");
-	if(!wsclientkey || dec64(wsclientkeydec, 16, wsclientkey, strlen(s)) != 16)
+	if(!wsclientkey || strlen(wsclientkey) != 24)
 		return failhdr(c, 400, "Bad Request", "invalid websocket nonce key.");
 	s = getheader(hdrs, "sec-websocket-version");
 	if(!s || !testwsversion(s))
 		return failhdr(c, 426, "Upgrade Required", "could not match websocket version.");
 	/* XXX should get resource name */
 	rawproto = getheader(hdrs, "sec-websocket-protocol");
-	proto = nil;
+	proto = rawproto;
 	/* XXX should test if proto is acceptable" */
 	/* should get sec-websocket-extensions */
 
 	/* OK, we seem to have a valid Websocket request. */
 
-	/* XXX should hash websocket key! */
+	/* Hash websocket key. */
+	strcpy(wscatkey, wsclientkey);
+	strcat(wscatkey, wsnoncekey);
+	sha1((uchar *)wscatkey, strlen(wscatkey), wshashedkey, nil);
+	enc64(wsencoded, 32, wshashedkey, SHA1dlen);
 
-	okhdr(c, wshashedkey, proto);
+	okhdr(c, wsencoded, proto);
+	hflush(ho);
 
 	/* We should now have an open Websocket connection. */
-
-	hflush(ho);
 	return 1;
 }
 
