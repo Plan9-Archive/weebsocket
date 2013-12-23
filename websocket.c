@@ -115,12 +115,40 @@ testwsversion(const char *vs)
 	return 0;
 }
 
+/* Assumptions: */
+/* We are always sending a binary frame (type 2). */
+/* We will never be masking the data. */
+/* Messages will be atomic: all frames are final. */
 void
-sendpkt(void)
+sendpkt(uchar *msg, ulong len)
 {
-	uchar msg[] = {0x81, 0x05, 'h', 'e', 'l', 'l', 'o'};
+	uchar hdr[2+8] = {0x82};
+	ulong hdrsz;
+	IOchunk ioc[2];
 
-	write(1, msg, sizeof(msg));
+	/* XXX only supports up to 32 bits */
+	if(len >= (1 << 16)){
+		hdrsz = 2 + 8;
+		hdr[1] = 127;
+		hdr[2] = hdr[3] = hdr[4] = hdr[5] = 0;
+		hdr[6] = len & (0xFF << 24);
+		hdr[7] = len & (0xFF << 16);
+		hdr[8] = len & (0xFF << 8);
+		hdr[9] = len & (0xFF << 0);
+	}else if(len >= 126){
+		hdrsz = 2 + 2;
+		hdr[1] = 126;
+		hdr[2] = len & (0xFF << 8);
+		hdr[3]= len & (0xFF << 0);
+	}else{
+		hdrsz = 2;
+		hdr[1] = len;
+	}
+
+	ioc[0] = (IOchunk){hdr, hdrsz};
+	ioc[1] = (IOchunk){msg, len};
+
+	writev(1, ioc, 2);
 }
 
 int
@@ -171,9 +199,7 @@ dowebsock(HConnect *c)
 	hflush(ho);
 
 	/* We should now have an open Websocket connection. */
-	sendpkt();
-	sendpkt();
-	sendpkt();
+	sendpkt((uchar *)"hello world", strlen("hello world"));
 	return 1;
 }
 
