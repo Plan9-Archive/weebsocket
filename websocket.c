@@ -115,6 +115,14 @@ testwsversion(const char *vs)
 	return 0;
 }
 
+void
+sendpkt(void)
+{
+	uchar msg[] = {0x81, 0x05, 'h', 'e', 'l', 'l', 'o'};
+
+	write(1, msg, sizeof(msg));
+}
+
 int
 dowebsock(HConnect *c)
 {
@@ -163,6 +171,9 @@ dowebsock(HConnect *c)
 	hflush(ho);
 
 	/* We should now have an open Websocket connection. */
+	sendpkt();
+	sendpkt();
+	sendpkt();
 	return 1;
 }
 
