@@ -119,6 +119,7 @@ testwsversion(const char *vs)
 /* We are always sending a binary frame (type 2). */
 /* We will never be masking the data. */
 /* Messages will be atomic: all frames are final. */
+/* XXX convert to bio(2) */
 void
 sendpkt(uchar *msg, ulong len)
 {
