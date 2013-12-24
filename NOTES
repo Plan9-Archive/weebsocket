@@ -1,17 +1,9 @@
-more funny names: vermaj: vermin
+Don't trust size field sent from client!  Limit to read()'s return
+value or we could overflow.
 
-Best strategy: modify libhttpd to list all headers.
-/sys/src/libhttpd/parse.c:/mimeconnection/
-is the relevant function.
+Currently we're allocating a 16kb buffer for each packet received.
+This is likely suboptimal.
 
-/sys/include/httpd.h:/HttpHead/
-struct meant to store all parsed headers.
-Currently it only stores headers recognised specially by libhttpd.
-Add a field
-	HSPairs *all; /* all headers */
-to store every header (or just unrecognised?)
-
-Currently we can get the raw headers from HConnect.header,
-but we have to parse them ourselves.
-
-With the change, HConnect.head.all would be a list of key-value pairs.
+The Bio buffer size for outgoing packets should perhaps be tuned to
+(max input pkt + max header size) so that write(2) will only be called
+on Bflush(2),

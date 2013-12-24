@@ -1,17 +1,43 @@
 #include <u.h>
 #include <libc.h>
+#include <thread.h>
 #include <bio.h>
 #include <mp.h>
 #include <libsec.h>
 #include "httpd.h"
 #include "httpsrv.h"
 
+/* XXX The default was not enough, but this is just a guess. */
+int mainstacksize = 32768;
+
 Hio *ho;
+Biobuf bin, bout;
 
 #define MAXHDRS 64
 
 const char wsnoncekey[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const int wsversion = 13;
+
+typedef struct Procio Procio;
+struct Procio
+{
+	Channel *c;
+	Biobuf *b;
+	int fd;
+};
+
+enum
+{
+	STACKSZ = 2048,
+	BUFSZ = 16384,
+};
+
+typedef struct Buf Buf;
+struct Buf
+{
+	uchar *buf;
+	long n;
+};
 
 HSPairs *
 parseheaders(char *headers)
@@ -152,6 +178,29 @@ sendpkt(uchar *msg, ulong len)
 	writev(1, ioc, 2);
 }
 
+void
+wsreadproc(void *arg)
+{
+	Buf b;
+
+	for(;;){
+		b.buf = malloc(BUFSZ);
+		if(!b.buf)
+			sysfatal("wsreadproc: could not allocate: %r");
+		b.n = read(0, b.buf, BUFSZ);
+		/* decode packet */
+		/* mask if appropriate */
+		/* send on chan */
+	}
+}
+
+void
+pipereadproc(void *arg)
+{
+	/* read from pipe */
+	/* send on chan */
+}
+
 int
 dowebsock(HConnect *c)
 {
@@ -205,7 +254,7 @@ dowebsock(HConnect *c)
 }
 
 void
-main(int argc, char **argv)
+threadmain(int argc, char **argv)
 {
 	HConnect *c;
 
