@@ -39,6 +39,19 @@ struct Buf
 	long n;
 };
 
+enum Pkttype
+{
+	CONT = 0x0,
+	TEXT = 0x1,
+	BINARY = 0x2,
+	/* reserved non-control frames */
+	CLOSE = 0x8,
+	PING = 0x9,
+	PONG = 0xA,
+	/* reserved control frames */
+};
+
+
 HSPairs *
 parseheaders(char *headers)
 {
@@ -142,14 +155,13 @@ testwsversion(const char *vs)
 }
 
 /* Assumptions: */
-/* We are always sending a binary frame (type 2). */
 /* We will never be masking the data. */
 /* Messages will be atomic: all frames are final. */
 /* XXX convert to bio(2) */
 void
-sendpkt(uchar *msg, ulong len)
+sendpkt(enum Pkttype type, uchar *msg, ulong len)
 {
-	uchar hdr[2+8] = {0x82};
+	uchar hdr[2+8] = {0x80 | type};
 	ulong hdrsz;
 	IOchunk ioc[2];
 
@@ -249,7 +261,7 @@ dowebsock(HConnect *c)
 	hflush(ho);
 
 	/* We should now have an open Websocket connection. */
-	sendpkt((uchar *)"hello world", strlen("hello world"));
+	sendpkt(BINARY, (uchar *)"hello world", strlen("hello world"));
 	return 1;
 }
 
