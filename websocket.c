@@ -51,6 +51,14 @@ enum Pkttype
 	/* reserved control frames */
 };
 
+typedef struct Wspkt Wspkt;
+struct Wspkt
+{
+	Buf b;
+	enum Pkttype type;
+	int masked;
+	uchar mask[4];
+};
 
 HSPairs *
 parseheaders(char *headers)
@@ -159,11 +167,13 @@ testwsversion(const char *vs)
 /* Messages will be atomic: all frames are final. */
 /* XXX convert to bio(2) */
 void
-sendpkt(enum Pkttype type, uchar *msg, ulong len)
+sendpkt(Wspkt *pkt)
 {
-	uchar hdr[2+8] = {0x80 | type};
-	ulong hdrsz;
+	uchar hdr[2+8] = {0x80 | pkt->type};
+	ulong hdrsz, len;
 	IOchunk ioc[2];
+
+	len = pkt->b.n;
 
 	/* XXX only supports up to 32 bits */
 	if(len >= (1 << 16)){
@@ -185,7 +195,7 @@ sendpkt(enum Pkttype type, uchar *msg, ulong len)
 	}
 
 	ioc[0] = (IOchunk){hdr, hdrsz};
-	ioc[1] = (IOchunk){msg, len};
+	ioc[1] = (IOchunk){pkt->b.buf, len};
 
 	writev(1, ioc, 2);
 }
@@ -261,7 +271,17 @@ dowebsock(HConnect *c)
 	hflush(ho);
 
 	/* We should now have an open Websocket connection. */
-	sendpkt(BINARY, (uchar *)"hello world", strlen("hello world"));
+	//sendpkt(BINARY, (uchar *)"hello world", strlen("hello world"));
+	{
+		/* I can't figure out how to include an array in (Wspkt){...} struct literal syntax. */
+		/* I can't figure out how to use {.x=...} struct literal syntax in an expression. */
+		Wspkt mypkt = {
+			.b = (Buf){(uchar *)"hello world", strlen("hello world")},
+			.type = BINARY,
+			.masked = 0,
+		};
+		sendpkt(&mypkt);
+	}
 	return 1;
 }
 
