@@ -206,11 +206,17 @@ wsreadproc(void *arg)
 	Buf b;
 
 	for(;;){
-		b.buf = malloc(BUFSZ);
-		if(!b.buf)
-			sysfatal("wsreadproc: could not allocate: %r");
-		b.n = read(0, b.buf, BUFSZ);
-		/* decode packet */
+		//b.buf = malloc(BUFSZ);
+		//if(!b.buf)
+		//	sysfatal("wsreadproc: could not allocate: %r");
+		//b.n = read(0, b.buf, BUFSZ);
+
+		/* Bgetc header */
+		/* allocate appropriate buffer */
+		/* while((remaining -= Bread(remaining, buf)) > 0); */
+		/* XXX allocation -> DoS if we're sent a packet with a huge size! */
+		/* if(pkt.size <= MAXPKTSZ){ malloc(pkt.size) } else { close connection (see error code table) } */
+		/* websocket spec allows this behaviour. (where?) */
 		/* mask if appropriate */
 		/* send on chan */
 	}
