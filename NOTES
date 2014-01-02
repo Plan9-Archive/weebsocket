@@ -1,9 +1,3 @@
-Don't trust size field sent from client!  Limit to read()'s return
-value or we could overflow.
-
-Currently we're allocating a 16kb buffer for each packet received.
-This is likely suboptimal.
-
 The Bio buffer size for outgoing packets should perhaps be tuned to
 (max input pkt + max header size) so that write(2) will only be called
 on Bflush(2),

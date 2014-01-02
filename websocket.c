@@ -200,24 +200,82 @@ sendpkt(Wspkt *pkt)
 	writev(1, ioc, 2);
 }
 
+Wspkt
+recvpkt(Biobuf *b)
+{
+	Wspkt pkt;
+	long sz;
+
+	pkt.type = Bgetc(b);
+	if(pkt.type < 0){
+		/* read error */
+	}
+	/* Strip FIN/continuation bit. */
+	pkt.type &= 0x0F;
+
+	pkt.n = Bgetc(b);
+	if(pkt.n < 0){
+		/* read error */
+	}
+	pkt.masked = pkt.n & 0x80;
+	pkt.n &= 0x7F;
+	sz = 0;
+	/* XXX Get a char array in one step with Bread! */
+	if(pkt.n >= 127){
+		sz |= Bgetc(b) << 56;
+		sz |= Bgetc(b) << 48;
+		sz |= Bgetc(b) << 40;
+		sz |= Bgetc(b) << 32;
+		sz |= Bgetc(b) << 24;
+		sz |= Bgetc(b) << 16;
+	}
+	if(pkt.n >= 126){
+		sz |= Bgetc(b) << 8;
+		sz |= Bgetc(b) << 0;
+		pkt.n = sz;
+	}
+	if(pkt.masked){
+		pkt.mask[0] = Bgetc(b);
+		pkt.mask[1] = Bgetc(b);
+		pkt.mask[2] = Bgetc(b);
+		pkt.mask[3] = Bgetc(b);
+	}
+	/* allocate appropriate buffer */
+	if(pkt.n > BUFSZ){
+		/* buffer unacceptably large! */
+		/* XXX this should close the connection with a specific error code. */
+		/* See websocket spec. */
+	}
+	pkt.buf = malloc(pkt.n);
+	if(!pkt.buf)
+		sysfatal("wsreadproc: could not allocate: %r");
+
+	sz = pkt.n;
+	/* XXX Bread returns negative on error; should use a temp variable. */
+	while((sz -= Bread(b, pkt.buf + (pkt.n - sz), sz)) > 0);
+
+	if(pkt.masked)
+		for(sz = 0; sz <= pkt.n; ++sz)
+			pkt.buf[sz] ^= pkt.mask[sz % 4];
+	pkt.masked = 0;
+
+	return pkt;
+}
+
 void
 wsreadproc(void *arg)
 {
-	Buf b;
+	Procio *pio;
+	Channel *c;
+	Biobuf *b;
+	Wspkt pkt;
+
+	pio = (Procio *)arg;
+	c = pio->c;
+	b = pio->b;
 
 	for(;;){
-		//b.buf = malloc(BUFSZ);
-		//if(!b.buf)
-		//	sysfatal("wsreadproc: could not allocate: %r");
-		//b.n = read(0, b.buf, BUFSZ);
-
-		/* Bgetc header */
-		/* allocate appropriate buffer */
-		/* while((remaining -= Bread(remaining, buf)) > 0); */
-		/* XXX allocation -> DoS if we're sent a packet with a huge size! */
-		/* if(pkt.size <= MAXPKTSZ){ malloc(pkt.size) } else { close connection (see error code table) } */
-		/* websocket spec allows this behaviour. (where?) */
-		/* mask if appropriate */
+		pkt = recvpkt(b);
 		/* send on chan */
 	}
 }
