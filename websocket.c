@@ -54,7 +54,7 @@ enum Pkttype
 typedef struct Wspkt Wspkt;
 struct Wspkt
 {
-	Buf b;
+	Buf;
 	enum Pkttype type;
 	int masked;
 	uchar mask[4];
@@ -173,7 +173,7 @@ sendpkt(Wspkt *pkt)
 	ulong hdrsz, len;
 	IOchunk ioc[2];
 
-	len = pkt->b.n;
+	len = pkt->n;
 
 	/* XXX only supports up to 32 bits */
 	if(len >= (1 << 16)){
@@ -195,7 +195,7 @@ sendpkt(Wspkt *pkt)
 	}
 
 	ioc[0] = (IOchunk){hdr, hdrsz};
-	ioc[1] = (IOchunk){pkt->b.buf, len};
+	ioc[1] = (IOchunk){pkt->buf, len};
 
 	writev(1, ioc, 2);
 }
@@ -281,10 +281,14 @@ dowebsock(HConnect *c)
 	{
 		/* I can't figure out how to include an array in (Wspkt){...} struct literal syntax. */
 		/* I can't figure out how to use {.x=...} struct literal syntax in an expression. */
+		/* I can't figure out how to initialise an anonymous substructure in a {.x=...} literal. */
 		Wspkt mypkt = {
-			.b = (Buf){(uchar *)"hello world", strlen("hello world")},
 			.type = BINARY,
 			.masked = 0,
+		};
+		mypkt.Buf = (Buf){
+			(uchar *)"hello world",
+			strlen("hello world"),
 		};
 		sendpkt(&mypkt);
 	}
