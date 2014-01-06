@@ -210,6 +210,8 @@ recvpkt(Biobuf *b)
 	pkt.type = Bgetc(b);
 	if(pkt.type < 0){
 		/* read error */
+		/* XXX better error handling! */
+		sysfatal("recvpkt: %r");
 	}
 	/* Strip FIN/continuation bit. */
 	pkt.type &= 0x0F;
@@ -338,18 +340,19 @@ dowebsock(HConnect *c)
 	/* We should now have an open Websocket connection. */
 	//sendpkt(BINARY, (uchar *)"hello world", strlen("hello world"));
 	{
-		/* I can't figure out how to include an array in (Wspkt){...} struct literal syntax. */
-		/* I can't figure out how to use {.x=...} struct literal syntax in an expression. */
-		/* I can't figure out how to initialise an anonymous substructure in a {.x=...} literal. */
-		Wspkt mypkt = {
-			.type = BINARY,
-			.masked = 0,
-		};
-		mypkt.Buf = (Buf){
-			(uchar *)"hello world",
-			strlen("hello world"),
-		};
-		sendpkt(&mypkt);
+		Biobuf b;
+		Wspkt pkt;
+
+		Binit(&b, 0, OREAD);
+
+		for(;;){
+			pkt = recvpkt(&b);
+			syslog(1, "websocket", "received packet type %d size %ld", pkt.type, pkt.n);
+			sendpkt(&pkt);
+			syslog(1, "websocket", "sent packet");
+			if(pkt.type == CLOSE)
+				break;
+		}
 	}
 	return 1;
 }
@@ -358,6 +361,8 @@ void
 threadmain(int argc, char **argv)
 {
 	HConnect *c;
+
+	syslog(1, "websocket", "websocket process %d", getpid());
 
 	c = init(argc, argv);
 	ho = &c->hout;
