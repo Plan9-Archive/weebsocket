@@ -169,10 +169,11 @@ testwsversion(const char *vs)
 void
 sendpkt(Wspkt *pkt)
 {
-	uchar hdr[2+8] = {0x80 | pkt->type};
+	uchar hdr[2+8];
 	ulong hdrsz, len;
 	IOchunk ioc[2];
 
+	hdr[0] = 0x80 | pkt->type;
 	len = pkt->n;
 
 	/* XXX only supports up to 32 bits */
