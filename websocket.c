@@ -176,20 +176,20 @@ sendpkt(Wspkt *pkt)
 	hdr[0] = 0x80 | pkt->type;
 	len = pkt->n;
 
-	/* XXX only supports up to 32 bits */
+	/* XXX should use putbe(). */
 	if(len >= (1 << 16)){
 		hdrsz = 2 + 8;
 		hdr[1] = 127;
 		hdr[2] = hdr[3] = hdr[4] = hdr[5] = 0;
-		hdr[6] = len & (0xFF << 24);
-		hdr[7] = len & (0xFF << 16);
-		hdr[8] = len & (0xFF << 8);
-		hdr[9] = len & (0xFF << 0);
+		hdr[6] = len >> 24;
+		hdr[7] = len >> 16;
+		hdr[8] = len >> 8;
+		hdr[9] = len >> 0;
 	}else if(len >= 126){
 		hdrsz = 2 + 2;
 		hdr[1] = 126;
-		hdr[2] = len & (0xFF << 8);
-		hdr[3]= len & (0xFF << 0);
+		hdr[2] = len >> 8;
+		hdr[3]= len >> 0;
 	}else{
 		hdrsz = 2;
 		hdr[1] = len;
