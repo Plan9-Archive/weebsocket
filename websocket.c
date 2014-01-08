@@ -165,13 +165,11 @@ testwsversion(const char *vs)
 /* Assumptions: */
 /* We will never be masking the data. */
 /* Messages will be atomic: all frames are final. */
-/* XXX convert to bio(2) */
 void
-sendpkt(Wspkt *pkt)
+sendpkt(Biobuf *b, Wspkt *pkt)
 {
 	uchar hdr[2+8];
-	ulong hdrsz, len;
-	IOchunk ioc[2];
+	long hdrsz, len;
 
 	hdr[0] = 0x80 | pkt->type;
 	len = pkt->n;
@@ -195,10 +193,9 @@ sendpkt(Wspkt *pkt)
 		hdr[1] = len;
 	}
 
-	ioc[0] = (IOchunk){hdr, hdrsz};
-	ioc[1] = (IOchunk){pkt->buf, len};
-
-	writev(1, ioc, 2);
+	Bwrite(b, hdr, hdrsz);
+	Bwrite(b, pkt->buf, len);
+	Bflush(b);
 }
 
 Wspkt
@@ -340,15 +337,16 @@ dowebsock(HConnect *c)
 	/* We should now have an open Websocket connection. */
 	//sendpkt(BINARY, (uchar *)"hello world", strlen("hello world"));
 	{
-		Biobuf b;
+		Biobuf bin, bout;
 		Wspkt pkt;
 
-		Binit(&b, 0, OREAD);
+		Binit(&bin, 0, OREAD);
+		Binit(&bout, 1, OWRITE);
 
 		for(;;){
-			pkt = recvpkt(&b);
+			pkt = recvpkt(&bin);
 			syslog(1, "websocket", "received packet type %d size %ld", pkt.type, pkt.n);
-			sendpkt(&pkt);
+			sendpkt(&bout, &pkt);
 			syslog(1, "websocket", "sent packet");
 			if(pkt.type == CLOSE)
 				break;
