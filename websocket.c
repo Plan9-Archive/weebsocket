@@ -350,6 +350,9 @@ dowebsock(HConnect *c)
 				pkt.type = PONG;
 			sendpkt(&bout, &pkt);
 			syslog(1, "websocket", "sent packet");
+			free(pkt.buf);
+			pkt.buf = nil;
+			pkt.n = 0;
 			if(pkt.type == CLOSE)
 				break;
 		}
