@@ -245,20 +245,22 @@ recvpkt(Biobuf *b)
 		/* buffer unacceptably large! */
 		/* XXX this should close the connection with a specific error code. */
 		/* See websocket spec. */
+	}else if(pkt.n == 0){
+		pkt.buf = nil;
+	}else{
+		pkt.buf = malloc(pkt.n);
+		if(!pkt.buf)
+			sysfatal("wsreadproc: could not allocate: %r");
+
+		sz = pkt.n;
+		/* XXX Bread returns negative on error; should use a temp variable. */
+		while((sz -= Bread(b, pkt.buf + (pkt.n - sz), sz)) > 0);
+
+		if(pkt.masked)
+			for(sz = 0; sz < pkt.n; ++sz)
+				pkt.buf[sz] ^= pkt.mask[sz % 4];
+		pkt.masked = 0;
 	}
-	pkt.buf = malloc(pkt.n);
-	if(!pkt.buf)
-		sysfatal("wsreadproc: could not allocate: %r");
-
-	sz = pkt.n;
-	/* XXX Bread returns negative on error; should use a temp variable. */
-	while((sz -= Bread(b, pkt.buf + (pkt.n - sz), sz)) > 0);
-
-	if(pkt.masked)
-		for(sz = 0; sz < pkt.n; ++sz)
-			pkt.buf[sz] ^= pkt.mask[sz % 4];
-	pkt.masked = 0;
-
 	return pkt;
 }
 
