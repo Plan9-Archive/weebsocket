@@ -361,6 +361,10 @@ void
 threadmain(int argc, char **argv)
 {
 	HConnect *c;
+	int errfd;
+
+	errfd = open("/sys/log/websocket", OWRITE);
+	dup(errfd, 2);
 
 	syslog(1, "websocket", "websocket process %d", getpid());
 
