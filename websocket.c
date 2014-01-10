@@ -346,6 +346,8 @@ dowebsock(HConnect *c)
 		for(;;){
 			pkt = recvpkt(&bin);
 			syslog(1, "websocket", "received packet type %d size %ld", pkt.type, pkt.n);
+			if(pkt.type == PING)
+				pkt.type = PONG;
 			sendpkt(&bout, &pkt);
 			syslog(1, "websocket", "sent packet");
 			if(pkt.type == CLOSE)
