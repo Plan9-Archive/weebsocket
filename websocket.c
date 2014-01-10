@@ -255,7 +255,7 @@ recvpkt(Biobuf *b)
 	while((sz -= Bread(b, pkt.buf + (pkt.n - sz), sz)) > 0);
 
 	if(pkt.masked)
-		for(sz = 0; sz <= pkt.n; ++sz)
+		for(sz = 0; sz < pkt.n; ++sz)
 			pkt.buf[sz] ^= pkt.mask[sz % 4];
 	pkt.masked = 0;
 
