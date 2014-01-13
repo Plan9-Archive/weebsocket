@@ -278,15 +278,66 @@ wsreadproc(void *arg)
 
 	for(;;){
 		pkt = recvpkt(b);
-		/* send on chan */
+		send(c, &pkt);
+	}
+}
+
+void
+wswriteproc(void *arg)
+{
+	Procio *pio;
+	Channel *c;
+	Biobuf *b;
+	Wspkt pkt;
+
+	pio = (Procio *)arg;
+	c = pio->c;
+	b = pio->b;
+
+	for(;;){
+		recv(c, &pkt);
+		sendpkt(b, &pkt);
+		free(pkt.buf);
 	}
 }
 
 void
 pipereadproc(void *arg)
 {
-	/* read from pipe */
-	/* send on chan */
+	Procio *pio;
+	Channel *c;
+	int fd;
+	Buf b;
+
+	pio = (Procio *)arg;
+	c = pio->c;
+	fd = pio->fd;
+
+	for(;;){
+		b.buf = malloc(BUFSZ);
+		b.n = read(fd, b.buf, BUFSZ);
+		syslog(1, "websocket", "pipereadproc: read %ld", b.n);
+		send(c, &b);
+	}
+}
+
+void
+pipewriteproc(void *arg)
+{
+	Procio *pio;
+	Channel *c;
+	int fd;
+	Buf b;
+
+	pio = (Procio *)arg;
+	c = pio->c;
+	fd = pio->fd;
+
+	for(;;){
+		recv(c, &b);
+		write(fd, b.buf, b.n);
+		free(b.buf);
+	}
 }
 
 int
