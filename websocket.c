@@ -8,7 +8,7 @@
 #include "httpsrv.h"
 
 /* XXX The default was not enough, but this is just a guess. */
-int mainstacksize = 32768;
+int mainstacksize = 65536;
 
 Hio *ho;
 Biobuf bin, bout;
