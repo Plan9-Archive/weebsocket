@@ -28,8 +28,9 @@ struct Procio
 
 enum
 {
-	STACKSZ = 2048,
+	STACKSZ = 32768,
 	BUFSZ = 16384,
+	CHANBUF = 8,
 };
 
 typedef struct Buf Buf;
@@ -317,6 +318,10 @@ pipereadproc(void *arg)
 		b.buf = malloc(BUFSZ);
 		b.n = read(fd, b.buf, BUFSZ);
 		syslog(1, "websocket", "pipereadproc: read %ld", b.n);
+		if(b.n < 1){
+			sleep(1000*10);
+			continue;
+		}
 		send(c, &b);
 	}
 }
@@ -392,24 +397,74 @@ dowebsock(HConnect *c)
 	{
 		Biobuf bin, bout;
 		Wspkt pkt;
+		Buf buf;
+		int p[2], fd;
+		Alt a[] = {
+		/*	c	v	op */
+			{nil, &pkt, CHANRCV},
+			{nil, &buf, CHANRCV},
+			{nil, nil, CHANEND},
+		};
+		Procio fromws, tows, frompipe, topipe;
+
+		fromws.c = chancreate(sizeof(Wspkt), CHANBUF);
+		tows.c = chancreate(sizeof(Wspkt), CHANBUF);
+		frompipe.c = chancreate(sizeof(Buf), CHANBUF);
+		topipe.c = chancreate(sizeof(Buf), CHANBUF);
+
+		syslog(1, "websocket", "created chans");
+
+		a[0].c = fromws.c;
+		a[1].c = frompipe.c;
 
 		Binit(&bin, 0, OREAD);
 		Binit(&bout, 1, OWRITE);
+		fromws.b = &bin;
+		tows.b = &bout;
+
+		pipe(p);
+		fd = create("/srv/weebtest", OWRITE, 0666);
+		fprint(fd, "%d", p[0]);
+		close(fd);
+		close(p[0]);
+
+		frompipe.fd = p[1];
+		topipe.fd = p[1];
+
+		syslog(1, "websocket", "before proccreate");
+
+		proccreate(wsreadproc, &fromws, STACKSZ);
+		proccreate(wswriteproc, &tows, STACKSZ);
+		proccreate(pipereadproc, &frompipe, STACKSZ);
+		proccreate(pipewriteproc, &topipe, STACKSZ);
+
+		syslog(1, "websocket", "created procs");
 
 		for(;;){
-			pkt = recvpkt(&bin);
-			syslog(1, "websocket", "received packet type %d size %ld", pkt.type, pkt.n);
-			if(pkt.type == PING)
-				pkt.type = PONG;
-			sendpkt(&bout, &pkt);
-			syslog(1, "websocket", "sent packet");
-			free(pkt.buf);
-			pkt.buf = nil;
-			pkt.n = 0;
-			if(pkt.type == CLOSE)
+			switch(alt(a)){
+			case 0: /* from socket */
+				if(pkt.type == PING){
+					pkt.type = PONG;
+					send(tows.c, &pkt);
+				}else if(pkt.type == CLOSE){
+					send(tows.c, &pkt);
+					goto done;
+				}else{
+					send(topipe.c, &pkt.Buf);
+				}
 				break;
+			case 1: /* from pipe */
+				pkt.type = BINARY;
+				pkt.Buf = buf;
+				pkt.masked = 0;
+				send(tows.c, &pkt);
+				break;
+			default:
+				sysfatal("can't happen");
+			}
 		}
 	}
+done:
 	return 1;
 }
 
