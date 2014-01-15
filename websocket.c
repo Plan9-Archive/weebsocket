@@ -479,7 +479,8 @@ dowebsock(HConnect *c)
 		proccreate(pipereadproc, &frompipe, STACKSZ);
 		proccreate(pipewriteproc, &topipe, STACKSZ);
 
-		proccreate(echoproc, &echop, STACKSZ);
+		//proccreate(echoproc, &echop, STACKSZ);
+		proccreate(mountproc, &mountp, STACKSZ);
 
 		syslog(1, "websocket", "created procs");
 
