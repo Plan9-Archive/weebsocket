@@ -24,6 +24,7 @@ struct Procio
 	Channel *c;
 	Biobuf *b;
 	int fd;
+	char **argv;
 };
 
 enum
@@ -345,6 +346,41 @@ pipewriteproc(void *arg)
 	}
 }
 
+void
+mountproc(void *arg)
+{
+	Procio *pio;
+	int fd;
+	char **argv;
+
+	pio = (Procio *)arg;
+	fd = pio->fd;
+	argv = pio->argv;
+
+	if(mount(fd, -1, "/dev/", MBEFORE, "") == -1)
+		sysfatal("mount failed: %r");
+
+	procexec(nil, argv[0], argv);
+}
+
+void
+echoproc(void *arg)
+{
+	Procio *pio;
+	int fd;
+	char buf[1024];
+	int n;
+
+	pio = (Procio *)arg;
+	fd = pio->fd;
+
+	for(;;){
+		n = read(fd, buf, 1024);
+		if(n > 0)
+			write(fd, buf, n);
+	}
+}
+
 int
 dowebsock(HConnect *c)
 {
@@ -406,6 +442,8 @@ dowebsock(HConnect *c)
 			{nil, nil, CHANEND},
 		};
 		Procio fromws, tows, frompipe, topipe;
+		Procio mountp, echop;
+		char *argv[] = {"/bin/games/catclock", nil};
 
 		fromws.c = chancreate(sizeof(Wspkt), CHANBUF);
 		tows.c = chancreate(sizeof(Wspkt), CHANBUF);
@@ -423,13 +461,16 @@ dowebsock(HConnect *c)
 		tows.b = &bout;
 
 		pipe(p);
-		fd = create("/srv/weebtest", OWRITE, 0666);
-		fprint(fd, "%d", p[0]);
-		close(fd);
-		close(p[0]);
+		//fd = create("/srv/weebtest", OWRITE, 0666);
+		//fprint(fd, "%d", p[0]);
+		//close(fd);
+		//close(p[0]);
 
 		frompipe.fd = p[1];
 		topipe.fd = p[1];
+
+		mountp.fd = echop.fd = p[0];
+		mountp.argv = argv;
 
 		syslog(1, "websocket", "before proccreate");
 
@@ -437,6 +478,8 @@ dowebsock(HConnect *c)
 		proccreate(wswriteproc, &tows, STACKSZ);
 		proccreate(pipereadproc, &frompipe, STACKSZ);
 		proccreate(pipewriteproc, &topipe, STACKSZ);
+
+		proccreate(echoproc, &echop, STACKSZ);
 
 		syslog(1, "websocket", "created procs");
 
