@@ -16,7 +16,7 @@ Biobuf bin, bout;
 #define MAXHDRS 64
 
 const char wsnoncekey[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-const int wsversion = 13;
+const char wsversion[] = "13";
 
 typedef struct Procio Procio;
 struct Procio
@@ -159,7 +159,7 @@ testwsversion(const char *vs)
 
 	n = getfields(vs, v, 16, 1, "\t ,");
 	for(i = 0; i < n; ++i)
-		if(atoi(v[i]) == wsversion)
+		if(!strcmp(v[i], wsversion))
 			return 1;
 	return 0;
 }
