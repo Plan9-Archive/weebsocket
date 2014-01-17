@@ -164,6 +164,23 @@ testwsversion(const char *vs)
 	return 0;
 }
 
+vlong
+Bgetbe(Biobuf *b, int sz)
+{
+	uchar buf[8];
+	int i;
+	vlong x;
+
+	if(Bread(b, buf, sz) != sz)
+		return -1;
+
+	x = 0;
+	for(i = 0; i < sz; ++i)
+		x |= buf[i] << (8 * (sz - 1 - i));
+
+	return x;
+}
+
 /* Assumptions: */
 /* We will never be masking the data. */
 /* Messages will be atomic: all frames are final. */
@@ -221,21 +238,17 @@ recvpkt(Biobuf *b)
 	}
 	pkt.masked = pkt.n & 0x80;
 	pkt.n &= 0x7F;
-	sz = 0;
-	/* XXX Get a char array in one step with Bread! */
+
 	if(pkt.n >= 127){
-		sz |= Bgetc(b) << 56;
-		sz |= Bgetc(b) << 48;
-		sz |= Bgetc(b) << 40;
-		sz |= Bgetc(b) << 32;
-		sz |= Bgetc(b) << 24;
-		sz |= Bgetc(b) << 16;
+		pkt.n = Bgetbe(b, 8);
+	}else if(pkt.n == 126){
+		pkt.n = Bgetbe(b, 2);
 	}
-	if(pkt.n >= 126){
-		sz |= Bgetc(b) << 8;
-		sz |= Bgetc(b) << 0;
-		pkt.n = sz;
+	if(pkt.n < 0){
+		/* XXX error */
+		sysfatal("recvpkt: (pkt.n = %ld) read error: %r", pkt.n);
 	}
+
 	if(pkt.masked){
 		pkt.mask[0] = Bgetc(b);
 		pkt.mask[1] = Bgetc(b);
