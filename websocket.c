@@ -221,7 +221,6 @@ Wspkt
 recvpkt(Biobuf *b)
 {
 	Wspkt pkt;
-	long sz;
 
 	pkt.type = Bgetc(b);
 	if(pkt.type < 0){
@@ -234,7 +233,7 @@ recvpkt(Biobuf *b)
 
 	pkt.n = Bgetc(b);
 	if(pkt.n < 0){
-		/* read error */
+		sysfatal("recvpkt: read error: %r");
 	}
 	pkt.masked = pkt.n & 0x80;
 	pkt.n &= 0x7F;
@@ -250,30 +249,30 @@ recvpkt(Biobuf *b)
 	}
 
 	if(pkt.masked){
-		pkt.mask[0] = Bgetc(b);
-		pkt.mask[1] = Bgetc(b);
-		pkt.mask[2] = Bgetc(b);
-		pkt.mask[3] = Bgetc(b);
+		if(Bread(b, pkt.mask, 4) != 4)
+			sysfatal("recvpkt: read error: %r");
 	}
 	/* allocate appropriate buffer */
 	if(pkt.n > BUFSZ){
 		/* buffer unacceptably large! */
 		/* XXX this should close the connection with a specific error code. */
 		/* See websocket spec. */
+		sysfatal("recvpkt: packet too large (%ld)", pkt.n);
 	}else if(pkt.n == 0){
 		pkt.buf = nil;
 	}else{
+		long x;
+
 		pkt.buf = malloc(pkt.n);
 		if(!pkt.buf)
-			sysfatal("wsreadproc: could not allocate: %r");
+			sysfatal("recvpkt: could not allocate: %r");
 
-		sz = pkt.n;
-		/* XXX Bread returns negative on error; should use a temp variable. */
-		while((sz -= Bread(b, pkt.buf + (pkt.n - sz), sz)) > 0);
+		if(Bread(b, pkt.buf, pkt.n) != pkt.n)
+			sysfatal("recvpkt: read error: %r");
 
 		if(pkt.masked)
-			for(sz = 0; sz < pkt.n; ++sz)
-				pkt.buf[sz] ^= pkt.mask[sz % 4];
+			for(x = 0; x < pkt.n; ++x)
+				pkt.buf[x] ^= pkt.mask[x % 4];
 		pkt.masked = 0;
 	}
 	return pkt;
