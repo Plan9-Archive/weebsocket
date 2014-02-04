@@ -184,7 +184,7 @@ Bgetbe(Biobuf *b, int sz)
 /* Assumptions: */
 /* We will never be masking the data. */
 /* Messages will be atomic: all frames are final. */
-void
+int
 sendpkt(Biobuf *b, Wspkt *pkt)
 {
 	uchar hdr[2+8];
@@ -212,70 +212,74 @@ sendpkt(Biobuf *b, Wspkt *pkt)
 		hdr[1] = len;
 	}
 
-	Bwrite(b, hdr, hdrsz);
-	Bwrite(b, pkt->buf, len);
-	Bflush(b);
+	if(Bwrite(b, hdr, hdrsz) != hdrsz)
+		goto error;
+	if(Bwrite(b, pkt->buf, len) != len)
+		goto error;
+	if(Bflush(b) < 0)
+		goto error;
+
+	return 0;
+error:
+	return -1;
 }
 
-Wspkt
-recvpkt(Biobuf *b)
+int
+recvpkt(Wspkt *pkt, Biobuf *b)
 {
-	Wspkt pkt;
-
-	pkt.type = Bgetc(b);
-	if(pkt.type < 0){
+	pkt->type = Bgetc(b);
+	if(pkt->type < 0){
 		/* read error */
-		/* XXX better error handling! */
-		sysfatal("recvpkt: %r");
+		return -1;
 	}
 	/* Strip FIN/continuation bit. */
-	pkt.type &= 0x0F;
+	pkt->type &= 0x0F;
 
-	pkt.n = Bgetc(b);
-	if(pkt.n < 0){
-		sysfatal("recvpkt: read error: %r");
+	pkt->n = Bgetc(b);
+	if(pkt->n < 0){
+		return -1;
 	}
-	pkt.masked = pkt.n & 0x80;
-	pkt.n &= 0x7F;
+	pkt->masked = pkt->n & 0x80;
+	pkt->n &= 0x7F;
 
-	if(pkt.n >= 127){
-		pkt.n = Bgetbe(b, 8);
-	}else if(pkt.n == 126){
-		pkt.n = Bgetbe(b, 2);
+	if(pkt->n >= 127){
+		pkt->n = Bgetbe(b, 8);
+	}else if(pkt->n == 126){
+		pkt->n = Bgetbe(b, 2);
 	}
-	if(pkt.n < 0){
+	if(pkt->n < 0){
 		/* XXX error */
-		sysfatal("recvpkt: (pkt.n = %ld) read error: %r", pkt.n);
+		return -1;
 	}
 
-	if(pkt.masked){
-		if(Bread(b, pkt.mask, 4) != 4)
-			sysfatal("recvpkt: read error: %r");
+	if(pkt->masked){
+		if(Bread(b, pkt->mask, 4) != 4)
+			return -1;
 	}
 	/* allocate appropriate buffer */
-	if(pkt.n > BUFSZ){
+	if(pkt->n > BUFSZ){
 		/* buffer unacceptably large! */
 		/* XXX this should close the connection with a specific error code. */
 		/* See websocket spec. */
-		sysfatal("recvpkt: packet too large (%ld)", pkt.n);
-	}else if(pkt.n == 0){
-		pkt.buf = nil;
+		return -1;
+	}else if(pkt->n == 0){
+		pkt->buf = nil;
 	}else{
 		long x;
 
-		pkt.buf = malloc(pkt.n);
-		if(!pkt.buf)
-			sysfatal("recvpkt: could not allocate: %r");
+		pkt->buf = malloc(pkt->n);
+		if(!pkt->buf)
+			return -1;
 
-		if(Bread(b, pkt.buf, pkt.n) != pkt.n)
-			sysfatal("recvpkt: read error: %r");
+		if(Bread(b, pkt->buf, pkt->n) != pkt->n)
+			return -1;
 
-		if(pkt.masked)
-			for(x = 0; x < pkt.n; ++x)
-				pkt.buf[x] ^= pkt.mask[x % 4];
-		pkt.masked = 0;
+		if(pkt->masked)
+			for(x = 0; x < pkt->n; ++x)
+				pkt->buf[x] ^= pkt->mask[x % 4];
+		pkt->masked = 0;
 	}
-	return pkt;
+	return 1;
 }
 
 void
@@ -291,9 +295,16 @@ wsreadproc(void *arg)
 	b = pio->b;
 
 	for(;;){
-		pkt = recvpkt(b);
-		send(c, &pkt);
+		if(recvpkt(&pkt, b) < 0)
+			goto error;
+		else
+			if(send(c, &pkt) < 0)
+				goto error;
 	}
+error:
+	syslog(1, "websocket", "wsreadproc closing down");
+	chanclose(c);
+	threadexits(nil);
 }
 
 void
@@ -309,10 +320,15 @@ wswriteproc(void *arg)
 	b = pio->b;
 
 	for(;;){
-		recv(c, &pkt);
-		sendpkt(b, &pkt);
+		if(recv(c, &pkt) < 0)
+			goto error;
+		if(sendpkt(b, &pkt) < 0)
+			goto error;
 		free(pkt.buf);
 	}
+error:
+	chanclose(c);
+	threadexits(nil);
 }
 
 void
