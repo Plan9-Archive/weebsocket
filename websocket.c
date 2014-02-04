@@ -4,6 +4,7 @@
 #include <bio.h>
 #include <mp.h>
 #include <libsec.h>
+#include <auth.h>
 #include "httpd.h"
 #include "httpsrv.h"
 
@@ -385,12 +386,19 @@ void
 mountproc(void *arg)
 {
 	Procio *pio;
-	int fd;
+	int fd, i;
 	char **argv;
 
 	pio = (Procio *)arg;
 	fd = pio->fd;
 	argv = pio->argv;
+
+	for(i = 0; i < 20; ++i){
+		if(i != fd)
+			close(i);
+	}
+
+	newns("none", nil);
 
 	if(mount(fd, -1, "/dev/", MBEFORE, "") == -1)
 		sysfatal("mount failed: %r");
@@ -515,7 +523,7 @@ dowebsock(HConnect *c)
 		proccreate(pipewriteproc, &topipe, STACKSZ);
 
 		//proccreate(echoproc, &echop, STACKSZ);
-		proccreate(mountproc, &mountp, STACKSZ);
+		procrfork(mountproc, &mountp, STACKSZ, RFNAMEG|RFFDG);
 
 		syslog(1, "websocket", "created procs");
 
@@ -574,5 +582,5 @@ threadmain(int argc, char **argv)
 	ho = &c->hout;
 	if(hparseheaders(c, HSTIMEOUT) >= 0)
 		dowebsock(c);
-	exits(nil);
+	threadexitsall(nil);
 }
