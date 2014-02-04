@@ -347,7 +347,6 @@ pipereadproc(void *arg)
 	for(;;){
 		b.buf = malloc(BUFSZ);
 		b.n = read(fd, b.buf, BUFSZ);
-		syslog(1, "websocket", "pipereadproc: read %ld", b.n);
 		if(b.n < 1)
 			goto error;
 		if(send(c, &b) < 0)
@@ -477,7 +476,7 @@ dowebsock(HConnect *c)
 		Biobuf bin, bout;
 		Wspkt pkt;
 		Buf buf;
-		int p[2], fd;
+		int p[2];
 		Alt a[] = {
 		/*	c	v	op */
 			{nil, &pkt, CHANRCV},
@@ -514,8 +513,6 @@ dowebsock(HConnect *c)
 
 		mountp.fd = echop.fd = p[0];
 		mountp.argv = argv;
-
-		syslog(1, "websocket", "before proccreate");
 
 		proccreate(wsreadproc, &fromws, STACKSZ);
 		proccreate(wswriteproc, &tows, STACKSZ);
@@ -564,6 +561,7 @@ dowebsock(HConnect *c)
 		}
 	}
 done:
+	syslog(1, "websocket", "closing down cleanly");
 	return 1;
 }
 
