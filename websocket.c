@@ -520,7 +520,19 @@ dowebsock(HConnect *c)
 		syslog(1, "websocket", "created procs");
 
 		for(;;){
-			switch(alt(a)){
+			int i;
+
+			i = alt(a);
+			if(chanclosing(a[i].c) >= 0){
+				a[i].op = CHANNOP;
+				pkt.type = CLOSE;
+				pkt.buf = nil;
+				pkt.n = 0;
+				send(tows.c, &pkt);
+				goto done;
+			}
+
+			switch(i){
 			case 0: /* from socket */
 				if(pkt.type == PING){
 					pkt.type = PONG;
