@@ -347,12 +347,14 @@ pipereadproc(void *arg)
 		b.buf = malloc(BUFSZ);
 		b.n = read(fd, b.buf, BUFSZ);
 		syslog(1, "websocket", "pipereadproc: read %ld", b.n);
-		if(b.n < 1){
-			sleep(1000*10);
-			continue;
-		}
-		send(c, &b);
+		if(b.n < 1)
+			goto error;
+		if(send(c, &b) < 0)
+			goto error;
 	}
+error:
+	chanclose(c);
+	threadexits(nil);
 }
 
 void
@@ -368,10 +370,15 @@ pipewriteproc(void *arg)
 	fd = pio->fd;
 
 	for(;;){
-		recv(c, &b);
-		write(fd, b.buf, b.n);
+		if(recv(c, &b) != 1)
+			goto error;
+		if(write(fd, b.buf, b.n) != b.n)
+			goto error;
 		free(b.buf);
 	}
+error:
+	chanclose(c);
+	threadexits(nil);
 }
 
 void
