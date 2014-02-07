@@ -1,0 +1,65 @@
+.TH WEBSOCKET 8
+.SH NAME
+websocket \- a 9P-over-websocket bridge for httpd(8)
+.SH SYNOPSIS
+.B websocket
+.I "magic parameters" ...
+.PP
+.B
+new WebSocket("http://server.example/magic/websocket", "9p");
+.SH DESCRIPTION
+.I Websocket
+is an
+.IR httpd (8)
+.I magic
+program that tunnels a 9P connection over a WebSocket, allowing
+JavaScript programs in a web browser to interact with Plan 9 services.
+.PP
+Currently, it always mounts the connection over
+.B /dev/
+and launches
+.IR catclock ,
+which expects the
+.B /dev/draw/
+provided by
+.IR 9webdraw .
+.SH FILES
+.TP
+.B /sys/log/websocket
+.SH SOURCE
+.B /sys/src/cmd/ip/httpd/websocket.c
+.PP
+.B https://bitbucket.org/dhoskin/weebsocket/
+.SH "SEE ALSO"
+.IR intro (5),
+.IR httpd (8)
+.PP
+.B https://bitbucket.org/dhoskin/9webdraw
+.SH BUGS
+The command
+.B /bin/games/catclock
+is hardcoded.
+.PP
+No authentication is performed, and raw 9P is used rather than
+.IR cpu (1)'s
+protocol.
+.PP
+More interesting programs such as
+.IR acme (1)
+cannot run as user
+.IR none ,
+because its default namespace does not include a writeable
+.BR /tmp/ .
+.PP
+Rather than hardcoding 9P, plugins for different protocols could
+be chosen using the WebSocket subprotocol header.
+.PP
+Rather than running under
+.IR httpd (8)
+and starting a given command for each connection,
+it could be generalised to serve a
+.B /net/websocket/
+directory under which arbitrary programs could
+.IR announce (2),
+with the port field specifying the subprotocol:
+.BR "announce(``websocket!*!9p'', nil)" .
