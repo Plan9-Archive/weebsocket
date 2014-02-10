@@ -16,5 +16,4 @@ replaced by Weebsocket.  The function that chooses the websocket
 address needs a slight modification; rather than
 `ws://host.example/9p`, `ws://host.example/magic/websocket` is used.
 
-[0]:
-https://bitbucket.org/dhoskin/9webdraw/
+[0]: https://bitbucket.org/dhoskin/9webdraw/
