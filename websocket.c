@@ -83,7 +83,8 @@ parseheaders(char *headers)
 
 		getfields(hdrlines[i], kv, 2, 1, ": \t");
 
-		if((tmp = malloc(sizeof(HSPairs))) == nil)
+		tmp = malloc(sizeof(HSPairs));
+		if(tmp == nil)
 			goto cleanup;
 
 		tmp->s = kv[0];
