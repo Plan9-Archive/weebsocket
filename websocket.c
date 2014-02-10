@@ -8,16 +8,26 @@
 #include "httpd.h"
 #include "httpsrv.h"
 
-/* XXX The default was not enough, but this is just a guess. */
-int mainstacksize = 65536;
+enum
+{
+	/* misc parameters */
+	MAXHDRS = 64,
+	STACKSZ = 32768,
+	BUFSZ = 16384,
+	CHANBUF = 8,
 
-Hio *ho;
-Biobuf bin, bout;
-
-#define MAXHDRS 64
-
-const char wsnoncekey[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-const char wsversion[] = "13";
+	/* packet types */
+	/* standard non-control frames */
+	Cont = 0x0,
+	Text = 0x1,
+	Binary = 0x2,
+	/* reserved non-control frames */
+	/* standard control frames */
+	Close = 0x8,
+	Ping = 0x9,
+	Pong = 0xA,
+	/* reserved control frames */
+};
 
 typedef struct Procio Procio;
 struct Procio
@@ -28,13 +38,6 @@ struct Procio
 	char **argv;
 };
 
-enum
-{
-	STACKSZ = 32768,
-	BUFSZ = 16384,
-	CHANBUF = 8,
-};
-
 typedef struct Buf Buf;
 struct Buf
 {
@@ -42,32 +45,26 @@ struct Buf
 	long n;
 };
 
-enum Pkttype
-{
-	CONT = 0x0,
-	TEXT = 0x1,
-	BINARY = 0x2,
-	/* reserved non-control frames */
-	CLOSE = 0x8,
-	PING = 0x9,
-	PONG = 0xA,
-	/* reserved control frames */
-};
-
 typedef struct Wspkt Wspkt;
 struct Wspkt
 {
 	Buf;
-	enum Pkttype type;
-	int masked;
-	uchar mask[4];
+	int type;
 };
+
+/* XXX The default was not enough, but this is just a guess. */
+int mainstacksize = 65536;
+
+Biobuf bin, bout;
+
+const char wsnoncekey[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+const char wsversion[] = "13";
 
 HSPairs *
 parseheaders(char *headers)
 {
-	char *hdrlines[MAXHDRS];
-	HSPairs *h, *t;
+	char *hdrlines[MAXHDRS], *kv[2];
+	HSPairs *h, *t, *tmp;
 	int nhdr;
 	int i;
 
@@ -75,13 +72,13 @@ parseheaders(char *headers)
 
 	nhdr = getfields(headers, hdrlines, MAXHDRS, 1, "\r\n");
 
-	/* XXX I think leading whitespaces signifies a continuation line. */
-	/* Skip the first line, or else getfields(..., " ") picks up the GET. */
+	/*
+	* XXX I think leading whitespaces signifies a continuation line.
+	* Skip the first line, or else getfields(..., " ") picks up the GET.
+	*/
 	for(i = 1; i < nhdr; ++i){
-		HSPairs *tmp;
-		char *kv[2];
 
-		if(!hdrlines[i])
+		if(hdrlines[i] == nil)
 			continue;
 
 		getfields(hdrlines[i], kv, 2, 1, ": \t");
@@ -92,7 +89,7 @@ parseheaders(char *headers)
 		tmp->s = kv[0];
 		tmp->t = kv[1];
 
-		if(!h){
+		if(h == nil){
 			h = t = tmp;
 		}else{
 			t->next = tmp;
@@ -113,7 +110,7 @@ char *
 getheader(HSPairs *h, const char *k)
 {
 	for(; h != nil; h = h->next)
-		if(!cistrcmp(h->s, k))
+		if(cistrcmp(h->s, k) == 0)
 			return h->t;
 	return nil;
 }
@@ -122,6 +119,7 @@ int
 failhdr(HConnect *c, int code, const char *status, const char *message)
 {
 	Hio *o;
+
 	o = &c->hout;
 	hprint(o, "%s %d %s\r\n", hversion, code, status);
 	hprint(o, "Server: Plan9\r\n");
@@ -140,12 +138,13 @@ void
 okhdr(HConnect *c, const char *wshashedkey, const char *proto)
 {
 	Hio *o;
+
 	o = &c->hout;
 	hprint(o, "%s 101 Switching Protocols\r\n", hversion);
 	hprint(o, "Upgrade: websocket\r\n");
 	hprint(o, "Connection: upgrade\r\n");
 	hprint(o, "Sec-WebSocket-Accept: %s\r\n", wshashedkey);
-	if(proto)
+	if(proto != nil)
 		hprint(o, "Sec-WebSocket-Protocol: %s\r\n", proto);
 	/* we don't handle extensions */
 	hprint(o, "\r\n");
@@ -160,17 +159,17 @@ testwsversion(const char *vs)
 
 	n = getfields(vs, v, 16, 1, "\t ,");
 	for(i = 0; i < n; ++i)
-		if(!strcmp(v[i], wsversion))
+		if(strcmp(v[i], wsversion) == 0)
 			return 1;
 	return 0;
 }
 
-vlong
+uvlong
 Bgetbe(Biobuf *b, int sz)
 {
 	uchar buf[8];
 	int i;
-	vlong x;
+	uvlong x;
 
 	if(Bread(b, buf, sz) != sz)
 		return -1;
@@ -182,9 +181,10 @@ Bgetbe(Biobuf *b, int sz)
 	return x;
 }
 
-/* Assumptions: */
-/* We will never be masking the data. */
-/* Messages will be atomic: all frames are final. */
+/* Assumptions:
+* We will never be masking the data.
+* Messages will be atomic: all frames are final.
+*/
 int
 sendpkt(Biobuf *b, Wspkt *pkt)
 {
@@ -214,23 +214,24 @@ sendpkt(Biobuf *b, Wspkt *pkt)
 	}
 
 	if(Bwrite(b, hdr, hdrsz) != hdrsz)
-		goto error;
+		return -1;
 	if(Bwrite(b, pkt->buf, len) != len)
-		goto error;
+		return -1;
 	if(Bflush(b) < 0)
-		goto error;
+		return -1;
 
 	return 0;
-error:
-	return -1;
 }
 
 int
 recvpkt(Wspkt *pkt, Biobuf *b)
 {
+	long x;
+	int masked;
+	uchar mask[4];
+
 	pkt->type = Bgetc(b);
 	if(pkt->type < 0){
-		/* read error */
 		return -1;
 	}
 	/* Strip FIN/continuation bit. */
@@ -240,7 +241,7 @@ recvpkt(Wspkt *pkt, Biobuf *b)
 	if(pkt->n < 0){
 		return -1;
 	}
-	pkt->masked = pkt->n & 0x80;
+	masked = pkt->n & 0x80;
 	pkt->n &= 0x7F;
 
 	if(pkt->n >= 127){
@@ -249,38 +250,38 @@ recvpkt(Wspkt *pkt, Biobuf *b)
 		pkt->n = Bgetbe(b, 2);
 	}
 	if(pkt->n < 0){
-		/* XXX error */
 		return -1;
 	}
 
-	if(pkt->masked){
-		if(Bread(b, pkt->mask, 4) != 4)
+	if(masked){
+		if(Bread(b, mask, 4) != 4)
 			return -1;
 	}
 	/* allocate appropriate buffer */
 	if(pkt->n > BUFSZ){
-		/* buffer unacceptably large! */
-		/* XXX this should close the connection with a specific error code. */
-		/* See websocket spec. */
+		/*
+		* buffer is unacceptably large!
+		* XXX this should close the connection with a specific error code.
+		* See websocket spec.
+		*/
 		return -1;
 	}else if(pkt->n == 0){
 		pkt->buf = nil;
+		return 1;
 	}else{
-		long x;
-
 		pkt->buf = malloc(pkt->n);
-		if(!pkt->buf)
+		if(pkt->buf == nil)
 			return -1;
 
 		if(Bread(b, pkt->buf, pkt->n) != pkt->n)
 			return -1;
 
-		if(pkt->masked)
+		if(masked)
 			for(x = 0; x < pkt->n; ++x)
-				pkt->buf[x] ^= pkt->mask[x % 4];
-		pkt->masked = 0;
+				pkt->buf[x] ^= mask[x % 4];
+
+		return 1;
 	}
-	return 1;
 }
 
 void
@@ -297,13 +298,11 @@ wsreadproc(void *arg)
 
 	for(;;){
 		if(recvpkt(&pkt, b) < 0)
-			goto error;
-		else
-			if(send(c, &pkt) < 0)
-				goto error;
+			break;
+		if(send(c, &pkt) < 0)
+			break;
 	}
-error:
-	syslog(1, "websocket", "wsreadproc closing down");
+
 	chanclose(c);
 	threadexits(nil);
 }
@@ -322,12 +321,12 @@ wswriteproc(void *arg)
 
 	for(;;){
 		if(recv(c, &pkt) < 0)
-			goto error;
+			break;
 		if(sendpkt(b, &pkt) < 0)
-			goto error;
+			break;
 		free(pkt.buf);
 	}
-error:
+
 	chanclose(c);
 	threadexits(nil);
 }
@@ -348,11 +347,11 @@ pipereadproc(void *arg)
 		b.buf = malloc(BUFSZ);
 		b.n = read(fd, b.buf, BUFSZ);
 		if(b.n < 1)
-			goto error;
+			break;
 		if(send(c, &b) < 0)
-			goto error;
+			break;
 	}
-error:
+
 	chanclose(c);
 	threadexits(nil);
 }
@@ -371,12 +370,12 @@ pipewriteproc(void *arg)
 
 	for(;;){
 		if(recv(c, &b) != 1)
-			goto error;
+			break;
 		if(write(fd, b.buf, b.n) != b.n)
-			goto error;
+			break;
 		free(b.buf);
 	}
-error:
+
 	chanclose(c);
 	threadexits(nil);
 }
@@ -424,7 +423,7 @@ echoproc(void *arg)
 }
 
 int
-dowebsock(HConnect *c)
+wscheckhdr(HConnect *c)
 {
 	HSPairs *hdrs;
 	char *s, *wsclientkey;
@@ -434,7 +433,7 @@ dowebsock(HConnect *c)
 	uchar wshashedkey[SHA1dlen];
 	char wsencoded[32];
 
-	if(strcmp(c->req.meth, "GET"))
+	if(strcmp(c->req.meth, "GET") != 0)
 		return hunallowed(c, "GET");
 
 	//return failhdr(c, 403, "Forbidden", "my hair is on fire");
@@ -442,16 +441,16 @@ dowebsock(HConnect *c)
 	hdrs = parseheaders((char *)c->header);
 
 	s = getheader(hdrs, "upgrade");
-	if(!s || !cistrstr(s, "websocket"))
-		return failhdr(c, 400, "Bad Request", "no <pre>upgrade: websocket</pre> header.");
+	if(s == nil || !cistrstr(s, "websocket"))
+		return failhdr(c, 400, "Bad Request", "no <code>upgrade: websocket</code> header.");
 	s = getheader(hdrs, "connection");
-	if(!s || !cistrstr(s, "upgrade"))
-		return failhdr(c, 400, "Bad Request", "no <pre>connection: upgrade</pre> header.");
+	if(s == nil || !cistrstr(s, "upgrade"))
+		return failhdr(c, 400, "Bad Request", "no <code>connection: upgrade</code> header.");
 	wsclientkey = getheader(hdrs, "sec-websocket-key");
-	if(!wsclientkey || strlen(wsclientkey) != 24)
+	if(wsclientkey == nil || strlen(wsclientkey) != 24)
 		return failhdr(c, 400, "Bad Request", "invalid websocket nonce key.");
 	s = getheader(hdrs, "sec-websocket-version");
-	if(!s || !testwsversion(s))
+	if(s == nil || !testwsversion(s))
 		return failhdr(c, 426, "Upgrade Required", "could not match websocket version.");
 	/* XXX should get resource name */
 	rawproto = getheader(hdrs, "sec-websocket-protocol");
@@ -468,96 +467,99 @@ dowebsock(HConnect *c)
 	enc64(wsencoded, 32, wshashedkey, SHA1dlen);
 
 	okhdr(c, wsencoded, proto);
-	hflush(ho);
+	hflush(&c->hout);
 
 	/* We should now have an open Websocket connection. */
-	//sendpkt(BINARY, (uchar *)"hello world", strlen("hello world"));
-	{
-		Biobuf bin, bout;
-		Wspkt pkt;
-		Buf buf;
-		int p[2];
-		Alt a[] = {
-		/*	c	v	op */
-			{nil, &pkt, CHANRCV},
-			{nil, &buf, CHANRCV},
-			{nil, nil, CHANEND},
-		};
-		Procio fromws, tows, frompipe, topipe;
-		Procio mountp, echop;
-		char *argv[] = {"/bin/games/catclock", nil};
 
-		fromws.c = chancreate(sizeof(Wspkt), CHANBUF);
-		tows.c = chancreate(sizeof(Wspkt), CHANBUF);
-		frompipe.c = chancreate(sizeof(Buf), CHANBUF);
-		topipe.c = chancreate(sizeof(Buf), CHANBUF);
+	return 1;
+}
 
-		syslog(1, "websocket", "created chans");
+int
+dowebsock(void)
+{
+	Biobuf bin, bout;
+	Wspkt pkt;
+	Buf buf;
+	int p[2];
+	Alt a[] = {
+	/*	c	v	op */
+		{nil, &pkt, CHANRCV},
+		{nil, &buf, CHANRCV},
+		{nil, nil, CHANEND},
+	};
+	Procio fromws, tows, frompipe, topipe;
+	Procio mountp, echop;
+	char *argv[] = {"/bin/games/catclock", nil};
 
-		a[0].c = fromws.c;
-		a[1].c = frompipe.c;
+	fromws.c = chancreate(sizeof(Wspkt), CHANBUF);
+	tows.c = chancreate(sizeof(Wspkt), CHANBUF);
+	frompipe.c = chancreate(sizeof(Buf), CHANBUF);
+	topipe.c = chancreate(sizeof(Buf), CHANBUF);
 
-		Binit(&bin, 0, OREAD);
-		Binit(&bout, 1, OWRITE);
-		fromws.b = &bin;
-		tows.b = &bout;
+	syslog(1, "websocket", "created chans");
 
-		pipe(p);
-		//fd = create("/srv/weebtest", OWRITE, 0666);
-		//fprint(fd, "%d", p[0]);
-		//close(fd);
-		//close(p[0]);
+	a[0].c = fromws.c;
+	a[1].c = frompipe.c;
 
-		frompipe.fd = p[1];
-		topipe.fd = p[1];
+	Binit(&bin, 0, OREAD);
+	Binit(&bout, 1, OWRITE);
+	fromws.b = &bin;
+	tows.b = &bout;
 
-		mountp.fd = echop.fd = p[0];
-		mountp.argv = argv;
+	pipe(p);
+	//fd = create("/srv/weebtest", OWRITE, 0666);
+	//fprint(fd, "%d", p[0]);
+	//close(fd);
+	//close(p[0]);
 
-		proccreate(wsreadproc, &fromws, STACKSZ);
-		proccreate(wswriteproc, &tows, STACKSZ);
-		proccreate(pipereadproc, &frompipe, STACKSZ);
-		proccreate(pipewriteproc, &topipe, STACKSZ);
+	frompipe.fd = p[1];
+	topipe.fd = p[1];
 
-		//proccreate(echoproc, &echop, STACKSZ);
-		procrfork(mountproc, &mountp, STACKSZ, RFNAMEG|RFFDG);
+	mountp.fd = echop.fd = p[0];
+	mountp.argv = argv;
 
-		syslog(1, "websocket", "created procs");
+	proccreate(wsreadproc, &fromws, STACKSZ);
+	proccreate(wswriteproc, &tows, STACKSZ);
+	proccreate(pipereadproc, &frompipe, STACKSZ);
+	proccreate(pipewriteproc, &topipe, STACKSZ);
 
-		for(;;){
-			int i;
+	//proccreate(echoproc, &echop, STACKSZ);
+	procrfork(mountproc, &mountp, STACKSZ, RFNAMEG|RFFDG);
 
-			i = alt(a);
-			if(chanclosing(a[i].c) >= 0){
-				a[i].op = CHANNOP;
-				pkt.type = CLOSE;
-				pkt.buf = nil;
-				pkt.n = 0;
+	syslog(1, "websocket", "created procs");
+
+	for(;;){
+		int i;
+
+		i = alt(a);
+		if(chanclosing(a[i].c) >= 0){
+			a[i].op = CHANNOP;
+			pkt.type = Close;
+			pkt.buf = nil;
+			pkt.n = 0;
+			send(tows.c, &pkt);
+			goto done;
+		}
+
+		switch(i){
+		case 0: /* from socket */
+			if(pkt.type == Ping){
+				pkt.type = Pong;
+				send(tows.c, &pkt);
+			}else if(pkt.type == Close){
 				send(tows.c, &pkt);
 				goto done;
+			}else{
+				send(topipe.c, &pkt.Buf);
 			}
-
-			switch(i){
-			case 0: /* from socket */
-				if(pkt.type == PING){
-					pkt.type = PONG;
-					send(tows.c, &pkt);
-				}else if(pkt.type == CLOSE){
-					send(tows.c, &pkt);
-					goto done;
-				}else{
-					send(topipe.c, &pkt.Buf);
-				}
-				break;
-			case 1: /* from pipe */
-				pkt.type = BINARY;
-				pkt.Buf = buf;
-				pkt.masked = 0;
-				send(tows.c, &pkt);
-				break;
-			default:
-				sysfatal("can't happen");
-			}
+			break;
+		case 1: /* from pipe */
+			pkt.type = Binary;
+			pkt.Buf = buf;
+			send(tows.c, &pkt);
+			break;
+		default:
+			sysfatal("can't happen");
 		}
 	}
 done:
@@ -577,8 +579,9 @@ threadmain(int argc, char **argv)
 	syslog(1, "websocket", "websocket process %d", getpid());
 
 	c = init(argc, argv);
-	ho = &c->hout;
 	if(hparseheaders(c, HSTIMEOUT) >= 0)
-		dowebsock(c);
+		if(wscheckhdr(c) >= 0)
+			dowebsock();
+
 	threadexitsall(nil);
 }
