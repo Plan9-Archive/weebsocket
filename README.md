@@ -9,12 +9,12 @@ Add `websocket` to `TARG` and `XTARG` in
 
 ## Using
 
-Currently, catclock is hardcoded, which requires [9webdraw].
+Currently, catclock is hardcoded, which requires [9webdraw][0].
 
 Ignore its installation instructions; all of the C and Go plumbing is
 replaced by Weebsocket.  The function that chooses the websocket
 address needs a slight modification; rather than
 `ws://host.example/9p`, `ws://host.example/magic/websocket` is used.
 
-[9webdraw]:
+[0]:
 https://bitbucket.org/dhoskin/9webdraw/
