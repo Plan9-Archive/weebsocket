@@ -57,8 +57,6 @@ struct Wspkt
 /* XXX The default was not enough, but this is just a guess. */
 int mainstacksize = 65536;
 
-Biobuf bin, bout;
-
 const char wsnoncekey[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const char wsversion[] = "13";
 
