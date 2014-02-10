@@ -1,3 +1,5 @@
+/* Copyright © 2013-2014 David Hoskin <root@davidrhoskin.com> */
+
 #include <u.h>
 #include <libc.h>
 #include <thread.h>
