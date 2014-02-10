@@ -48,7 +48,7 @@ More interesting programs such as
 .IR acme (1)
 cannot run as user
 .IR none ,
-because its default namespace does not include a writeable
+because its default name\%space does not include a writeable
 .BR /tmp/ .
 .PP
 Rather than hardcoding 9P, plugins for different protocols could
