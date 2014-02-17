@@ -165,8 +165,8 @@ testwsversion(const char *vs)
 	return 0;
 }
 
-uvlong
-Bgetbe(Biobuf *b, int sz)
+int
+Bgetbe(Biobuf *b, uvlong *u, int sz)
 {
 	uchar buf[8];
 	int i;
@@ -175,11 +175,14 @@ Bgetbe(Biobuf *b, int sz)
 	if(Bread(b, buf, sz) != sz)
 		return -1;
 
+	/* XXX This should use getbe(). */
+	//*u = getbe(buf, sz);
 	x = 0;
 	for(i = 0; i < sz; ++i)
 		x |= buf[i] << (8 * (sz - 1 - i));
 
-	return x;
+	*u = x;
+	return 1;
 }
 
 int
@@ -242,12 +245,11 @@ recvpkt(Wspkt *pkt, Biobuf *b)
 	pkt->n &= 0x7F;
 
 	if(pkt->n >= 127){
-		pkt->n = Bgetbe(b, 8);
+		if(Bgetbe(b, (uvlong *)&pkt->n, 8) != 1)
+			return -1;
 	}else if(pkt->n == 126){
-		pkt->n = Bgetbe(b, 2);
-	}
-	if(pkt->n < 0){
-		return -1;
+		if(Bgetbe(b, (uvlong *)&pkt->n, 2) != 1)
+			return -1;
 	}
 
 	if(masked){
