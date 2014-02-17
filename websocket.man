@@ -23,9 +23,6 @@ which expects the
 .B /dev/draw
 provided by
 .IR 9webdraw .
-.SH FILES
-.TP
-.B /sys/log/websocket
 .SH SOURCE
 .B /sys/src/cmd/ip/httpd/websocket.c
 .PP
