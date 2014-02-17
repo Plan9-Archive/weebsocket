@@ -270,8 +270,10 @@ recvpkt(Wspkt *pkt, Biobuf *b)
 		if(pkt->buf == nil)
 			return -1;
 
-		if(Bread(b, pkt->buf, pkt->n) != pkt->n)
+		if(Bread(b, pkt->buf, pkt->n) != pkt->n){
+			free(pkt->buf);
 			return -1;
+		}
 
 		if(masked)
 			for(x = 0; x < pkt->n; ++x)
@@ -296,8 +298,10 @@ wsreadproc(void *arg)
 	for(;;){
 		if(recvpkt(&pkt, b) < 0)
 			break;
-		if(send(c, &pkt) < 0)
+		if(send(c, &pkt) < 0){
+			free(pkt.buf);
 			break;
+		}
 	}
 
 	chanclose(c);
@@ -319,8 +323,10 @@ wswriteproc(void *arg)
 	for(;;){
 		if(recv(c, &pkt) < 0)
 			break;
-		if(sendpkt(b, &pkt) < 0)
+		if(sendpkt(b, &pkt) < 0){
+			free(pkt.buf);
 			break;
+		}
 		free(pkt.buf);
 	}
 
@@ -342,6 +348,8 @@ pipereadproc(void *arg)
 
 	for(;;){
 		b.buf = malloc(BUFSZ);
+		if(b.buf == nil)
+			break;
 		b.n = read(fd, b.buf, BUFSZ);
 		if(b.n < 1)
 			break;
@@ -349,6 +357,7 @@ pipereadproc(void *arg)
 			break;
 	}
 
+	free(b.buf);
 	chanclose(c);
 	threadexits(nil);
 }
@@ -368,8 +377,10 @@ pipewriteproc(void *arg)
 	for(;;){
 		if(recv(c, &b) != 1)
 			break;
-		if(write(fd, b.buf, b.n) != b.n)
+		if(write(fd, b.buf, b.n) != b.n){
+			free(b.buf);
 			break;
+		}
 		free(b.buf);
 	}
 
