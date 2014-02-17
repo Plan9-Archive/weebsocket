@@ -182,10 +182,6 @@ Bgetbe(Biobuf *b, int sz)
 	return x;
 }
 
-/* Assumptions:
-* We will never be masking the data.
-* Messages will be atomic: all frames are final.
-*/
 int
 sendpkt(Biobuf *b, Wspkt *pkt)
 {
@@ -511,8 +507,6 @@ dowebsock(void)
 	frompipe.c = chancreate(sizeof(Buf), CHANBUF);
 	topipe.c = chancreate(sizeof(Buf), CHANBUF);
 
-	syslog(1, "websocket", "created chans");
-
 	a[0].c = fromws.c;
 	a[1].c = frompipe.c;
 
@@ -540,8 +534,6 @@ dowebsock(void)
 
 	//proccreate(echoproc, &echop, STACKSZ);
 	procrfork(mountproc, &mountp, STACKSZ, RFNAMEG|RFFDG);
-
-	syslog(1, "websocket", "created procs");
 
 	for(;;){
 		int i;
@@ -578,7 +570,6 @@ dowebsock(void)
 		}
 	}
 done:
-	syslog(1, "websocket", "closing down cleanly");
 	return 1;
 }
 
@@ -587,11 +578,6 @@ threadmain(int argc, char **argv)
 {
 	HConnect *c;
 	int errfd;
-
-	errfd = open("/sys/log/websocket", OWRITE);
-	dup(errfd, 2);
-
-	syslog(1, "websocket", "websocket process %d", getpid());
 
 	c = init(argc, argv);
 	if(hparseheaders(c, HSTIMEOUT) >= 0)
