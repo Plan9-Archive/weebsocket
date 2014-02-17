@@ -588,7 +588,6 @@ void
 threadmain(int argc, char **argv)
 {
 	HConnect *c;
-	int errfd;
 
 	c = init(argc, argv);
 	if(hparseheaders(c, HSTIMEOUT) >= 0)
