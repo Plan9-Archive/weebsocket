@@ -169,19 +169,11 @@ int
 Bgetbe(Biobuf *b, uvlong *u, int sz)
 {
 	uchar buf[8];
-	int i;
-	uvlong x;
 
 	if(Bread(b, buf, sz) != sz)
 		return -1;
 
-	/* XXX This should use getbe(). */
-	//*u = getbe(buf, sz);
-	x = 0;
-	for(i = 0; i < sz; ++i)
-		x |= buf[i] << (8 * (sz - 1 - i));
-
-	*u = x;
+	*u = getbe(buf, sz);
 	return 1;
 }
 
