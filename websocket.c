@@ -391,20 +391,11 @@ pipewriteproc(void *arg)
 }
 
 void
-ramfsproc(void *arg)
-{
-	Channel *c = (Channel *)arg;
-
-	procexecl(c, "/bin/ramfs", nil);
-}
-
-void
 mountproc(void *arg)
 {
 	Procio *pio;
 	int fd, i;
 	char **argv;
-	Channel *c;
 
 	pio = (Procio *)arg;
 	fd = pio->fd;
@@ -416,11 +407,6 @@ mountproc(void *arg)
 	}
 
 	newns("none", nil);
-
-	c = chancreate(sizeof(ulong), 0);
-
-	proccreate(ramfsproc, c, STACKSZ);
-	recv(c, nil);
 
 	if(mount(fd, -1, "/dev/", MBEFORE, "") == -1)
 		sysfatal("mount failed: %r");
@@ -513,7 +499,7 @@ dowebsock(void)
 	};
 	Procio fromws, tows, frompipe, topipe;
 	Procio mountp, echop;
-	char *argv[] = {"/bin/acme", nil};
+	char *argv[] = {"/bin/rc", "-c", "ramfs; exec acme", nil};
 
 	fromws.c = chancreate(sizeof(Wspkt), CHANBUF);
 	tows.c = chancreate(sizeof(Wspkt), CHANBUF);
